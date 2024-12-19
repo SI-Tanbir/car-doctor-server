@@ -8,12 +8,12 @@ const jwt = require('jsonwebtoken');
 require("dotenv").config();
 
 //adding middle ware
-app.use(cors({
-  origin:[
-    'http://localhost:5173'
-  ],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: 'http://localhost:5173', // Your frontend URL
+    credentials: true, // Allows cookies to be sent
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser())
@@ -33,27 +33,28 @@ app.use(cookieParser())
 
 
 
-// const verifyToken = (req, res, next) => {
-//   const token = req.cookies?.token;
+const verifyToken = (req, res, next) => {
 
-//   console.log('Token received in middleware:', token);
 
-//   if (!token) {
-//     return res.status(401).send({ message: 'Not authorized' });
-//   }
+  const token = req.cookies?.token;
+  console.log('Token received in middleware:', token);
 
-//   // Verify the token
-//   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-//     if (err) {
-//       console.error('Error verifying token:', err.message);
-//       return res.status(410).send({ message: 'Unauthorized shafik' });
-//     }
+  if (!token) {
+    return res.status(401).send({ message: 'Not authorized' });
+  }
 
-//     console.log('Decoded token:', decoded);
-//     req.user = decoded; // Optionally attach the decoded token to the request object
-//     next(); // Proceed to the next middleware
-//   });
-// };
+  // Verify the token
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      console.error('Error verifying token:', err.message);
+      return res.status(410).send({ message: 'Unauthorized shafik' });
+    }
+
+    console.log('Decoded token:', decoded);
+    req.user = decoded; // Optionally attach the decoded token to the request object
+    next(); // Proceed to the next middleware
+  });
+};
 
 
 
@@ -87,11 +88,24 @@ async function run() {
 
     //generateing jwt token
     app.post('/jwt',async(req,res)=>{
+      const data=req.body.email
+     const token= jwt.sign({email:data}, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' });    
+ 
+     
+  
+      res
+      .cookie('token',token,{
+        origin:'http://localhost:5173',
+        httpOnly:true,
+        secure:false,
+        sameSite:'lax',
+        
+        maxAge: 60 * 60 * 1000,
 
-      const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
-      console.log(token)
-      res.send(token)
+      })
+      .send({success:true})
 
+      console.log(data)
     })
 
     
@@ -149,11 +163,17 @@ async function run() {
     });
 
 
-    app.get("/bookings", async (req, res) => {
+
+
+
+
+    app.get("/bookings",verifyToken, async (req, res) => {
+
       const email = req.query.email;
       
       // Construct the query object based on the presence of the email parameter
       const query = email ? { email: email } : {};
+      console.log('chicking cookies of booking',req.cookies.token)
       
       const bookings = await MyOrder.find(query).sort({ email: 1 }).toArray();
       res.send(bookings)
@@ -161,6 +181,23 @@ async function run() {
      
    
     });
+
+
+    //adding logout and clearing cookies;
+    app.post('/logout', (req, res) => {
+      // Clear the JWT cookie when the user logs out
+      res.clearCookie('token', {
+        path: '/',
+        secure: false, // Set to true if you're using HTTPS
+        httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+        sameSite: 'lax', // If cross-origin
+      });
+    
+      res.status(200).send({ success: true, message: 'Logged out successfully' });
+    });
+    
+
+
 
 
 
